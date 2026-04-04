@@ -180,11 +180,12 @@ class ManicMinerDataset(Dataset):
             loc_list.append(loc)
 
         obs     = torch.from_numpy(np.stack(obs_list))      # [T, C, H, W]
-        actions = torch.from_numpy(np.stack(act_list))       # [T, 5]
+        actions = torch.from_numpy(np.stack(act_list))       # [T, A]
         locs    = torch.from_numpy(np.stack(loc_list))       # [T, 3]
 
-        # eb_jepa expects obs as [C, T, H, W]
-        obs = obs.permute(1, 0, 2, 3)  # [C, T, H, W]
+        # eb_jepa expects obs as [C, T, H, W] and actions as [A, T]
+        obs = obs.permute(1, 0, 2, 3)      # [C, T, H, W]
+        actions = actions.permute(1, 0)     # [A, T]
 
         # wall_x / door_y dummies to match WallSample format
         dummy = torch.tensor([0.0])

@@ -155,6 +155,7 @@ def run(
     predictor = RNNPredictor(
         hidden_size=encoder.mlp_output_dim,
         final_ln=encoder.final_ln,
+        action_dim=action_dim,
     )
 
     aencoder = nn.Identity()
