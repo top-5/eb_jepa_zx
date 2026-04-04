@@ -27,7 +27,7 @@ model:
   dstc: 32        # state channels (encoder last stack)
   nsteps: 8       # unroll steps
   compile: false
-  action_dim: 5   # noop, left, right, jump, jump_right
+  action_dim: 6   # noop, left, right, jump, left+jump, right+jump
   regularizer:
     cov_coeff: 8
     std_coeff: 16

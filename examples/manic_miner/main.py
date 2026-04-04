@@ -50,7 +50,7 @@ from eb_jepa.training_utils import (
 
 logger = get_logger(__name__)
 
-ACTION_DIM = 5  # noop, left, right, jump, jump_right
+ACTION_DIM = 6  # noop, left, right, jump, left+jump, right+jump
 
 
 def run(

@@ -33,22 +33,19 @@ from torch.utils.data import Dataset
 SCREEN_H, SCREEN_W = 192, 256
 # Attribute grid: 24 rows x 32 cols
 ATTR_H, ATTR_W = 24, 32
-N_ACTIONS = 5
+N_ACTIONS = 6
 
-# Action indices
-A_NOOP, A_LEFT, A_RIGHT, A_JUMP, A_JUMP_RIGHT = range(N_ACTIONS)
+# Action indices: NOOP=0, LEFT=1, RIGHT=2, JUMP=3, LEFT+JUMP=4, RIGHT+JUMP=5
+A_NOOP, A_LEFT, A_RIGHT, A_JUMP, A_LEFT_JUMP, A_RIGHT_JUMP = range(N_ACTIONS)
 
-# Mirror map: when flipping horizontally, left↔right, jump stays, jump_right
-# becomes "jump_left" which we map to jump+left (action 1, but we don't have
-# a dedicated jump_left action — the closest semantic is reversed).
-# For now: noop↔noop, left↔right, jump↔jump, jump_right→left (best approx)
-# TODO: if we add a jump_left action (action 5), update this map.
+# Mirror map for horizontal flip augmentation
 FLIP_ACTION = {
-    A_NOOP: A_NOOP,
-    A_LEFT: A_RIGHT,
-    A_RIGHT: A_LEFT,
-    A_JUMP: A_JUMP,
-    A_JUMP_RIGHT: A_LEFT,  # jump_right flipped ≈ moving left
+    A_NOOP:       A_NOOP,
+    A_LEFT:       A_RIGHT,
+    A_RIGHT:      A_LEFT,
+    A_JUMP:       A_JUMP,
+    A_LEFT_JUMP:  A_RIGHT_JUMP,
+    A_RIGHT_JUMP: A_LEFT_JUMP,
 }
 
 
