@@ -25,7 +25,7 @@ dependencies = [
     "pudb>=2025.1",
     "scikit-learn>=1.7.0",
     "tiktoken>=0.9.0",
-    "torch==2.6.0",
+    "torch>=2.1.0",
     "torchcodec>=0.4.0",
     "torchvision",
     "wandb[media]>=0.21.1",
@@ -39,7 +39,7 @@ dependencies = [
     "omegaconf",
     "ruamel.yaml",
 ]
-requires-python = "==3.12.*"
+requires-python = ">=3.10"
 
 [build-system]
 requires = ["setuptools>=61.0"]

@@ -22,18 +22,21 @@ def load_env_data_config(env_name: str, overrides: dict = None) -> dict:
 def init_data(env_name, cfg_data=None, **kwargs):
     """Initialize data loaders for the specified environment.
 
-    Loads base config from eb_jepa/datasets/{env_name}/data_config.yaml
-    and merges with any overrides from cfg_data.
-
     Args:
-        env_name: Name of the environment (currently only "two_rooms" is supported).
+        env_name: Name of the environment ("two_rooms" or "manic_miner").
         cfg_data: Configuration overrides for the dataset.
 
     Returns:
         Tuple of (train_loader, val_loader, config).
     """
+    if env_name == "manic_miner":
+        from eb_jepa.datasets.manic_miner import init_manic_miner_data
+        return init_manic_miner_data(cfg_data or {})
+
     if env_name != "two_rooms":
-        raise ValueError(f"Unknown env: {env_name}. Only 'two_rooms' is supported.")
+        raise ValueError(
+            f"Unknown env: {env_name}. Supported: 'two_rooms', 'manic_miner'."
+        )
 
     merged_cfg = load_env_data_config(env_name, cfg_data)
     config = update_config_from_yaml(WallDatasetConfig, merged_cfg)

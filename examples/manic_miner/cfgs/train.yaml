@@ -1,0 +1,51 @@
+meta:
+  seed: 42
+  load_model: false
+  enable_plan_eval: false
+  eval_every_itr: 500
+  light_eval_freq: 100
+
+data:
+  env_name: manic_miner
+  data_dirs:
+    - datasets/cma-ea/manic-miner
+  batch_size: 32
+  num_workers: 2
+  pin_mem: true
+  persistent_workers: true
+  seq_len: 16
+  frameskip: 1
+  max_shards: 0
+  img_size: 64
+
+model:
+  dobs: 1         # monochrome bitmap
+  henc: 32        # encoder hidden dim
+  hpre: 32        # predictor hidden dim
+  dstc: 32        # state channels (encoder last stack)
+  nsteps: 8       # unroll steps
+  compile: false
+  action_dim: 5   # noop, left, right, jump, jump_right
+  regularizer:
+    cov_coeff: 8
+    std_coeff: 16
+    sim_coeff_t: 12
+    idm_coeff: 1.0
+    use_proj: true
+    first_t_only: null
+    spatial_as_samples: true
+    idm_after_proj: false
+    sim_t_after_proj: false
+
+optim:
+  epochs: 30
+  lr: 0.0005
+  weight_decay: 0.000001
+  grad_clip_enc: 2.0
+  grad_clip_pred: 2.0
+
+logging:
+  log_every: 50
+  save_every_n_epochs: 5
+  log_wandb: false
+  tqdm_silent: false
