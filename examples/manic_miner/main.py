@@ -280,8 +280,8 @@ def run(
             probe_optimizer.zero_grad()
             with autocast(device.type, enabled=use_amp, dtype=dtype):
                 xy_loss = xy_prober(
-                    observations=x[:, :, :1],
-                    targets=loc[:, :, :1],
+                    observations=x[:, :, :1],          # [B, C, 1, H, W] first frame
+                    targets=loc[:, :1, :2].permute(0, 2, 1),  # [B, 2, 1] col+row for first frame
                 )
                 normalizer = (
                     loader.dataset.dataset.normalizer
