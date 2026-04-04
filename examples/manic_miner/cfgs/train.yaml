@@ -17,6 +17,8 @@ data:
   frameskip: 1
   max_shards: 0
   img_size: 64
+  hflip_prob: 0.5       # horizontal flip augmentation (teaches L/R symmetry)
+  use_attr_grid: false   # set true for 2-channel input (bitmap + attr grid)
 
 model:
   dobs: 1         # monochrome bitmap

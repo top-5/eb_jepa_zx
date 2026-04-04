@@ -19,6 +19,8 @@ def init_manic_miner_data(cfg_data: dict):
         frameskip=cfg_data.get("frameskip", 1),
         max_shards=cfg_data.get("max_shards", 0),
         img_size=cfg_data.get("img_size", 64),
+        hflip_prob=cfg_data.get("hflip_prob", 0.5),
+        use_attr_grid=cfg_data.get("use_attr_grid", False),
     )
 
     dset = ManicMinerDataset(cfg)

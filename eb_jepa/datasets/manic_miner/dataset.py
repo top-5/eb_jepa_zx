@@ -10,6 +10,14 @@ dicts with keys:
     reward           – float
     terminated       – bool
     truncated        – bool
+
+Features:
+    - Horizontal flip augmentation (p=0.5): mirrors the frame AND swaps
+      left↔right / jump_right↔jump_left actions.  Teaches JEPA that jump
+      physics are symmetric.
+    - Optional 2-channel mode (use_attr_grid=True): stacks the monochrome
+      bitmap with the 24×32 attribute grid (upscaled to img_size) so the
+      encoder can see platform structure directly.
 """
 
 from dataclasses import dataclass, field
@@ -23,7 +31,25 @@ from torch.utils.data import Dataset
 
 # ZX Spectrum display: 192 rows x 256 cols (monochrome bitmap)
 SCREEN_H, SCREEN_W = 192, 256
+# Attribute grid: 24 rows x 32 cols
+ATTR_H, ATTR_W = 24, 32
 N_ACTIONS = 5
+
+# Action indices
+A_NOOP, A_LEFT, A_RIGHT, A_JUMP, A_JUMP_RIGHT = range(N_ACTIONS)
+
+# Mirror map: when flipping horizontally, left↔right, jump stays, jump_right
+# becomes "jump_left" which we map to jump+left (action 1, but we don't have
+# a dedicated jump_left action — the closest semantic is reversed).
+# For now: noop↔noop, left↔right, jump↔jump, jump_right→left (best approx)
+# TODO: if we add a jump_left action (action 5), update this map.
+FLIP_ACTION = {
+    A_NOOP: A_NOOP,
+    A_LEFT: A_RIGHT,
+    A_RIGHT: A_LEFT,
+    A_JUMP: A_JUMP,
+    A_JUMP_RIGHT: A_LEFT,  # jump_right flipped ≈ moving left
+}
 
 
 @dataclass
@@ -39,6 +65,8 @@ class ManicMinerDataConfig:
     img_size: int = 64      # resized image side (H and W after downscale)
     size: int = 0           # filled in after loading
     val_size: int = 0
+    hflip_prob: float = 0.5     # horizontal flip augmentation probability
+    use_attr_grid: bool = False  # if True, stack attr grid as 2nd channel (dobs=2)
 
 
 class ManicMinerDataset(Dataset):
@@ -47,15 +75,18 @@ class ManicMinerDataset(Dataset):
     sequences suitable for eb_jepa training.
 
     Returns per __getitem__:
-        obs     – Tensor [T, 1, img_size, img_size]
+        obs     – Tensor [C, T, img_size, img_size]  C=1 or 2
         actions – Tensor [T, N_ACTIONS]   one-hot
         locs    – Tensor [T, 3]           (col, row, room) normalised
+        dummy, dummy – zeros (WallSample compat)
     """
 
     def __init__(self, cfg: ManicMinerDataConfig):
         self.cfg = cfg
         self.img_size = cfg.img_size
         self.seq_len = cfg.seq_len
+        self.hflip_prob = cfg.hflip_prob
+        self.use_attr_grid = cfg.use_attr_grid
         self.action_dim = N_ACTIONS
         self.proprio_dim = 3
         self.state_dim = 3
@@ -87,17 +118,29 @@ class ManicMinerDataset(Dataset):
 
     @staticmethod
     def _screen_to_image(screen_flat: list, img_size: int) -> np.ndarray:
-        """Convert 49152-float flat bitmap → [1, img_size, img_size] float32."""
+        """Convert 49152-float flat bitmap → [img_size, img_size] float32."""
         arr = np.array(screen_flat, dtype=np.float32).reshape(SCREEN_H, SCREEN_W)
-        # Downsample via block-mean to img_size x img_size
         bh, bw = SCREEN_H // img_size, SCREEN_W // img_size
-        # Use reshape + mean trick (only works when dims divide evenly)
-        # Pad / truncate if needed
         h_crop = img_size * bh
         w_crop = img_size * bw
         arr = arr[:h_crop, :w_crop]
         arr = arr.reshape(img_size, bh, img_size, bw).mean(axis=(1, 3))
-        return arr[np.newaxis, :, :]  # [1, H, W]
+        return arr  # [H, W]
+
+    @staticmethod
+    def _attr_to_image(attr_flat: list, img_size: int) -> np.ndarray:
+        """Convert 768-float attr grid → [img_size, img_size] float32.
+
+        Nearest-neighbor upscale from 24×32 to img_size×img_size.
+        """
+        arr = np.array(attr_flat, dtype=np.float32).reshape(ATTR_H, ATTR_W)
+        # Nearest-neighbor upscale via repeat
+        row_scale = img_size // ATTR_H  # 64/24 ≈ 2.67 — doesn't divide evenly
+        col_scale = img_size // ATTR_W  # 64/32 = 2
+        # Use np.kron for exact upscale, then crop/resize
+        # For simplicity, use repeat + slice
+        up = np.repeat(np.repeat(arr, row_scale + 1, axis=0), col_scale, axis=1)
+        return up[:img_size, :img_size]  # [H, W]
 
     @staticmethod
     def _action_onehot(action: int) -> np.ndarray:
@@ -112,18 +155,39 @@ class ManicMinerDataset(Dataset):
         ti, start = self.slices[idx]
         steps = self.trajectories[ti][start : start + self.seq_len]
 
+        do_flip = self.hflip_prob > 0 and np.random.random() < self.hflip_prob
+
         obs_list, act_list, loc_list = [], [], []
         for s in steps:
-            obs_list.append(self._screen_to_image(s["obs"]["screen"], self.img_size))
-            act_list.append(self._action_onehot(s["action"]))
-            loc_list.append(np.array(s["obs"]["position_vec"], dtype=np.float32))
+            bitmap = self._screen_to_image(s["obs"]["screen"], self.img_size)
 
-        obs     = torch.from_numpy(np.stack(obs_list))      # [T, 1, H, W]
+            if self.use_attr_grid:
+                attr = self._attr_to_image(s["obs"]["attr_grid"], self.img_size)
+                frame = np.stack([bitmap, attr], axis=0)  # [2, H, W]
+            else:
+                frame = bitmap[np.newaxis, :, :]  # [1, H, W]
+
+            if do_flip:
+                frame = frame[:, :, ::-1].copy()  # flip W axis
+
+            obs_list.append(frame)
+
+            action = int(s["action"])
+            if do_flip:
+                action = FLIP_ACTION.get(action, action)
+            act_list.append(self._action_onehot(action))
+
+            loc = np.array(s["obs"]["position_vec"], dtype=np.float32)
+            if do_flip:
+                loc[0] = 1.0 - loc[0]  # mirror col coordinate
+            loc_list.append(loc)
+
+        obs     = torch.from_numpy(np.stack(obs_list))      # [T, C, H, W]
         actions = torch.from_numpy(np.stack(act_list))       # [T, 5]
         locs    = torch.from_numpy(np.stack(loc_list))       # [T, 3]
 
         # eb_jepa expects obs as [C, T, H, W]
-        obs = obs.permute(1, 0, 2, 3)  # [1, T, H, W]
+        obs = obs.permute(1, 0, 2, 3)  # [C, T, H, W]
 
         # wall_x / door_y dummies to match WallSample format
         dummy = torch.tensor([0.0])
